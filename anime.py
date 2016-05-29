@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import collections
+import contextlib
 import datetime
 import logging
 import os
@@ -24,7 +25,7 @@ ONCOMPLETE_SCRIPT = os.path.join(CURRENT_DIR, 'clean.sh')
 
 AnimeEpisode = collections.namedtuple(
     'AnimeEpisode',
-    ('anime', 'number', 'version', 'quality', 'extension', 'link', 'published')
+    ('anime', 'number', 'version', 'quality', 'extension', 'link')
 )
 Download = collections.namedtuple('Download', AnimeEpisode._fields + ('start',))
 
@@ -43,15 +44,13 @@ def feed(feed_url, title_parser):
                 logging.error('Could not parse: %s' % feed_item)
                 continue
 
-            anime_item = AnimeEpisode(
-                link=feed_item['link'],
-                published=feed_item['published_parsed'],
-                **parsed_title.groupdict()
-            )
+            anime_item = AnimeEpisode(link=feed_item['link'], **parsed_title.groupdict())
 
             anime_book = feed_shelf.get(anime_item.anime, collections.defaultdict(dict))
-            anime_book[anime_item.quality][anime_item.number] = anime_item
-            feed_shelf[anime_item.anime] = anime_book
+            anime_quality_book = anime_book[anime_item.quality]
+            if anime_item.number not in anime_quality_book or anime_item != anime_quality_book[anime_item.number]:
+                anime_quality_book[anime_item.number] = anime_item
+                feed_shelf[anime_item.anime] = anime_book
 
 
 def download(animes_config):
@@ -81,11 +80,8 @@ def download(animes_config):
                     '--torrent-done-script', ONCOMPLETE_SCRIPT,
                 ]
                 subprocess.Popen(download_cmd)
-                
-                download = Download(
-                    start=datetime.datetime.now().isoformat(),
-                    **episode_to_dl._asdict()
-                )
+
+                download = Download(start=datetime.datetime.now().isoformat(), **episode_to_dl._asdict())
                 downloaded_episodes[episode_number_to_dl] = download
                 download_shelf[anime_title] = download_book
 
